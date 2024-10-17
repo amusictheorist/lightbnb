@@ -109,45 +109,44 @@ const getAllProperties = function(options, limit = 10) {
   const queryParams = [];
 
   let queryString = `
-      SELECT properties.*, avg(propery_reviews.rating) as average_rating
-      FROM properties
-      JOIN property_reviews ON properties.id = property_id
-      `;
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  WHERE 1=1
+  `;
 
-      const conditions = [];
-      if (options.city) {
-        queryParams.push(`%${options.city}`);
-        conditions.push(`city LIKE $${queryParams.length}`);
-      }
-      if (options.owner_id) {
-        queryParams.push(options.owner_id);
-        conditions.push(`owner_id = $${queryParams.length}`);
-      }
-      if (options.minimum_price_per_night) {
-        queryParams.push(options.minimum_price_per_night);
-        conditions.push(`minimum_price_per_night = $${queryParams.length}`);
-      }
-      if (options.maximum_price_per_night) {
-        queryParams.push(options.maximum_price_per_night);
-        conditions.push(`maximum_price_per_night = $${queryParams.length}`);
-      }
-      if (options.minimum_rating) {
-        queryParams.push(options.minimum_rating);
-        conditions.push(`minimum_rating = $${queryParams.length}`);
-      }
-      if (conditions.length > 0) {
-        queryString += "WHERE " + conditions.join(" AND ") + "\n";
-      }
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `AND city LIKE $${queryParams.length} `;
+  }
 
-      queryParams.push(limit);
-      queryString += `
-      GROUP BY properties.id
-      ORDER BY cost_per_night
-      LIMIT $${queryParams.length}
-      `;
-      
-      console.log(queryString, queryParams);
-      return pool.query(queryString, queryParams).then((res) => res.rows).catch((err) => {console.log(err.message)});
+  if (options.owner_id) {
+    queryParams.push(`${options.owner_id}`);
+    queryString += `AND owner_id = $${queryParams.length} `;
+  }
+
+  if (options.minimum_price_per_night && options.maximum_price_per_night) {
+    queryParams.push(options.minimum_price_per_night * 100);
+    queryParams.push(options.maximum_price_per_night * 100);
+    queryString += `AND (cost_per_night >= $${queryParams.length - 1} AND cost_per_night <= $${queryParams.length}) `;
+  }
+
+  queryString += `GROUP BY properties.id `;
+
+  if (options.minimum_rating) {
+    queryParams.push(options.minimum_rating);
+    queryString += `HAVING avg(rating) >= $${queryParams.length} `;
+  }
+
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length}
+  `;
+  
+  console.log(queryString, queryParams);
+  return pool.query(queryString, queryParams).then((res) => res.rows).catch((err) => {console.log(err.message)});
 };
 
 /**
